@@ -4,6 +4,7 @@ import kotlinx.coroutines.channels.produce
 import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
+import net.mamoe.mirai.closeAndJoin
 import net.mamoe.mirai.event.subscribeAlways
 import net.mamoe.mirai.message.GroupMessageEvent
 import net.mamoe.mirai.message.data.content
@@ -26,7 +27,7 @@ fun CoroutineScope.startServer() = produce {
     }
 }
 
-suspend fun launchBot(qqId: Long, dataChannel: ReceiveChannel<String>) = coroutineScope {
+suspend fun bot(qqId: Long, dataChannel: ReceiveChannel<String>) = coroutineScope {
     val defaultGroupId = 892887877L
     val file = File("./src/main/resources/deviceInfo.json")
     print("输入密码：")
@@ -70,16 +71,37 @@ suspend fun launchBot(qqId: Long, dataChannel: ReceiveChannel<String>) = corouti
     }
     for(data in dataChannel) {
         val dataJson = JSONObject(data)
-        var text: String = dataJson["text"] as String
-        val uri: String = dataJson["uri"] as String
-        val groups: JSONArray = dataJson["groups"] as JSONArray
-        if(!groups.isEmpty) {
-            if (text != "") launch {
-                text += ("\n"+uri)
-                groups.toList().forEach { bot.getGroup(it as Long).sendMessage(text) }
+        if(dataJson["type"] == "tweet") {
+            val tweet = tweetFormat(dataJson.getJSONObject("data"))
+            val text: String = tweet.getString("text")
+            //val uri: String = dataJson.getString("uri")
+            val photoArray: JSONArray = tweet.getJSONArray("photo")
+            val videoArray: JSONArray = tweet.getJSONArray("video")
+            val groups = tweet.getJSONArray("groups").toList() as List<String>
+            if (groups.isNotEmpty()) {
+                if (text != "") launch {
+                    //text += ("\n" + uri)
+                    groups.forEach { bot.getGroup(it.toLong()).sendMessage(text) }
+                }
+                if(!photoArray.isEmpty) {
+                    for(i in 0 until photoArray.length()) launch {
+                        val inputStream = downloadImage(photoArray.getString(i))
+                        groups.forEach { inputStream?.sendAsImageTo(bot.getGroup(it.toLong())) }
+                    }
+                }
+                if(!videoArray.isEmpty) {
+                    for(i in 0 until videoArray.length()) launch {
+                        groups.forEach {
+                            bot.getGroup(it.toLong()).sendMessage("视频下载地址：${videoArray.getString(i)}")
+                        }
+                    }
+                }
             }
+        } else {
+            DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
         }
     }
+    withContext(NonCancellable) { bot.closeAndJoin() }
 }
 
 @ExperimentalCoroutinesApi
@@ -87,7 +109,7 @@ fun main() = runBlocking {
     val qqId = 3174235713L
     try {
         val dataChannel = startServer()
-        launchBot(qqId, dataChannel)
+        launch { bot(qqId, dataChannel) }.join()
     } catch (e: Exception) {
         e.printStackTrace()
     } finally {
