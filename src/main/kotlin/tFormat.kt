@@ -27,22 +27,22 @@ private fun textFormat(tweet: JSONObject): String {
         else -> ""
     }
     val text = tweet.getString("text")
-    return """#$userName#
+    return """
+        #$userName#
         $time
         $text$type
-        $parentTweet
-    """.trimIndent()
+        $parentTweet""".trimIndent()
 }
 
 fun tweetFormat(data: JSONObject): JSONObject {
     val tweet = data.getJSONObject("tweet")
     val formattedTweet = JSONObject().apply {
-        append("groups", tweet.getJSONArray("qqGroups"))
-        append("text", textFormat(tweet))
+        put("groups", tweet.getJSONArray("qqGroups"))
+        put("text", textFormat(tweet))
     }
     if(tweet.has("extended_entities")) {
-        val mediaArray = tweet.getJSONObject("extend_entities").getJSONArray("media")
-        formattedTweet.append("photo", JSONArray().apply{
+        val mediaArray = tweet.getJSONObject("extended_entities").getJSONArray("media")
+        formattedTweet.put("photo", JSONArray().apply{
             for(i in 0 until mediaArray.length()) {
                 val media = mediaArray.getJSONObject(i)
                 if (media.getString("type") == "photo") {
@@ -50,7 +50,7 @@ fun tweetFormat(data: JSONObject): JSONObject {
                 }
             }
         })
-        formattedTweet.append("video", JSONArray().apply {
+        formattedTweet.put("video", JSONArray().apply {
             for (i in 0 until mediaArray.length()) {
                 val media = mediaArray.getJSONObject(i)
                 if (media.getString("type") == "video") {

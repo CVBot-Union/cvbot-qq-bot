@@ -18,17 +18,24 @@ import java.io.FileInputStream
 import java.lang.Exception
 import java.util.*
 
+@ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
 fun CoroutineScope.startServer() = produce {
     val server = LocalServer(1919, "UTF-8")
-    while(true) {
-        val data: String = server.receiveData()  // 阻塞直至收到数据
-        send(data)
+    // 开启一个新线程避免阻塞主线程
+    launch(newSingleThreadContext("ServerThread")) {
+        while (true) {
+            val data: String = server.receiveData() // 阻塞直至收到数据
+            send(data)
+        }
     }
 }
 
-suspend fun bot(qqId: Long, dataChannel: ReceiveChannel<String>) = coroutineScope {
-    val defaultGroupId = 892887877L
+suspend fun bot(
+        qqId: Long,
+        dataChannel: ReceiveChannel<String>,
+        defaultGroupId: Long=892887877L
+) = coroutineScope {
     val file = File("./src/main/resources/deviceInfo.json")
     print("输入密码：")
     val password = Scanner(System.`in`).next()
@@ -104,12 +111,13 @@ suspend fun bot(qqId: Long, dataChannel: ReceiveChannel<String>) = coroutineScop
     withContext(NonCancellable) { bot.closeAndJoin() }
 }
 
+@ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
 fun main() = runBlocking {
     val qqId = 3174235713L
     try {
         val dataChannel = startServer()
-        launch { bot(qqId, dataChannel) }.join()
+        bot(qqId, dataChannel)
     } catch (e: Exception) {
         e.printStackTrace()
     } finally {
