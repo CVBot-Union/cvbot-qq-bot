@@ -1,11 +1,12 @@
+import io.javalin.Javalin
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
 import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.closeAndJoin
 import net.mamoe.mirai.event.subscribeAlways
+import net.mamoe.mirai.join
 import net.mamoe.mirai.message.GroupMessageEvent
 import net.mamoe.mirai.message.data.content
 import net.mamoe.mirai.message.sendAsImageTo
@@ -32,9 +33,9 @@ fun CoroutineScope.startServer() = produce {
 }
 
 suspend fun bot(
-        qqId: Long,
-        dataChannel: ReceiveChannel<String>,
-        defaultGroupId: Long=892887877L
+    qqId: Long,
+    httpServer: Javalin,
+    defaultGroupId: Long=892887877L
 ) = coroutineScope {
     val file = File("./src/main/resources/deviceInfo.json")
     print("输入密码：")
@@ -61,11 +62,11 @@ suspend fun bot(
         inheritCoroutineContext()
     }.alsoLogin()
     if(bot.isOnline) {
-        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
-        launch {
-            val imgFile = File("./src/main/resources/very_spirited.jpg")
-            imgFile.sendAsImageTo(bot.getGroup(defaultGroupId))
-        }
+//        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
+//        launch {
+//            val imgFile = File("./src/main/resources/very_spirited.jpg")
+//            imgFile.sendAsImageTo(bot.getGroup(defaultGroupId))
+//        }
     }
     bot.subscribeAlways<GroupMessageEvent> {
         if(this.group.id == defaultGroupId && this.message.content == "#测试bot状态") {
@@ -76,14 +77,25 @@ suspend fun bot(
             } }
         }
     }
-    for(data in dataChannel) {
-        val dataJson = JSONObject(data)
+
+    httpServer.post("/") {
+        ctx ->
+        val dataJson = JSONObject(ctx.body());
+        ctx.result("OK");
+
         if(dataJson["type"] == "tweet") {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
             //val uri: String = dataJson.getString("uri")
-            val photoArray: JSONArray = tweet.getJSONArray("photo")
-            val videoArray: JSONArray = tweet.getJSONArray("video")
+
+            var photoArray: JSONArray = JSONArray()
+            var videoArray = JSONArray()
+
+            if(tweet.has("media_list")) {
+                photoArray = tweet.getJSONObject("media_list").getJSONArray("photo")
+                videoArray = tweet.getJSONObject("media_list").getJSONArray("video")
+            }
+
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) {
                 if (text != "") launch {
@@ -108,7 +120,8 @@ suspend fun bot(
             DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
         }
     }
-    withContext(NonCancellable) { bot.closeAndJoin() }
+
+    withContext(NonCancellable) { bot.join() }
 }
 
 @ObsoleteCoroutinesApi
@@ -116,8 +129,8 @@ suspend fun bot(
 fun main() = runBlocking {
     val qqId = 3174235713L
     try {
-        val dataChannel = startServer()
-        bot(qqId, dataChannel)
+        val httpServer = Javalin.create().start(1919);
+        bot(qqId, httpServer)
     } catch (e: Exception) {
         e.printStackTrace()
     } finally {
