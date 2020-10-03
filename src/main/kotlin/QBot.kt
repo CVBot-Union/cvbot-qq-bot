@@ -1,10 +1,8 @@
 import io.javalin.Javalin
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.produce
 import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
-import net.mamoe.mirai.closeAndJoin
 import net.mamoe.mirai.event.subscribeAlways
 import net.mamoe.mirai.join
 import net.mamoe.mirai.message.GroupMessageEvent
@@ -18,19 +16,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.lang.Exception
 import java.util.*
-
-@ObsoleteCoroutinesApi
-@ExperimentalCoroutinesApi
-fun CoroutineScope.startServer() = produce {
-    val server = LocalServer(1919, "UTF-8")
-    // 开启一个新线程避免阻塞主线程
-    launch(newSingleThreadContext("ServerThread")) {
-        while (true) {
-            val data: String = server.receiveData() // 阻塞直至收到数据
-            send(data)
-        }
-    }
-}
 
 suspend fun bot(
     qqId: Long,
@@ -61,25 +46,24 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
-    if(bot.isOnline) {
+//    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
 //        launch {
 //            val imgFile = File("./src/main/resources/very_spirited.jpg")
 //            imgFile.sendAsImageTo(bot.getGroup(defaultGroupId))
 //        }
-    }
+//    }
     bot.subscribeAlways<GroupMessageEvent> {
         if(this.group.id == defaultGroupId && this.message.content == "#测试bot状态") {
             reply("在线")
-            delay(500)
+            delay(200)
             launch { File("./src/main/resources/situation.jpg").run {
                 this.sendAsImageTo(this@subscribeAlways.group)
             } }
         }
     }
 
-    httpServer.post("/") {
-        ctx ->
+    httpServer.post("/") { ctx ->
         val dataJson = JSONObject(ctx.body());
         ctx.result("OK");
 
@@ -88,7 +72,7 @@ suspend fun bot(
             val text: String = tweet.getString("text")
             //val uri: String = dataJson.getString("uri")
 
-            var photoArray: JSONArray = JSONArray()
+            var photoArray = JSONArray()
             var videoArray = JSONArray()
 
             if(tweet.has("media_list")) {

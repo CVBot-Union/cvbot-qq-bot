@@ -18,22 +18,22 @@ private fun textFormat(tweet: JSONObject): String {
     }else{ tweet.getJSONObject("user").getString("name") }
 
     val time = toUTC8(tweet.getString("created_at"))
-    var parentTweet = ""
-    if (tweet.has("quoted_status")) {
-        parentTweet = textFormat(tweet.getJSONObject("quoted_status"))
-    } else if (tweet.has("retweeted_status")) {
-        parentTweet = textFormat(tweet.getJSONObject("retweeted_status"))
-    }
-    val type: String = when {
-        tweet.has("in_reply_to_status_id") -> ""
-        tweet.has("quoted_status") || tweet.has("retweeted_status") -> "\n\n转推\n\n"
+    val parentTweet = when {
+        tweet.has("quoted_status") -> textFormat(tweet.getJSONObject("quoted_status"))
+        tweet.has("retweeted_status") -> textFormat(tweet.getJSONObject("retweeted_status"))
         else -> ""
     }
 
-    val text = if(tweet.getBoolean("truncated")){
+    var text = if(tweet.getBoolean("truncated")){
         tweet.getJSONObject("extended_tweet").getString("full_text")
     }else{
         tweet.getString("text")
+    }
+    val type: String = when {
+        tweet.get("in_reply_to_status_id")!=null -> "".also { text="回复$text" }
+        tweet.has("retweeted_status") -> "\n转推:\n\n".also { text="" }
+        tweet.has("quoted_status") -> "\n转推:\n\n"
+        else -> ""
     }
     return """#$userName#
         |$time
@@ -42,9 +42,9 @@ private fun textFormat(tweet: JSONObject): String {
 }
 
 private fun mediaFormat(tweet: JSONObject) : JSONObject {
-    val formattedTweet = JSONObject()
+    val formattedMedia = JSONObject()
     val mediaArray = tweet.getJSONObject("extended_entities").getJSONArray("media")
-    formattedTweet.put("photo", JSONArray().apply{
+    formattedMedia.put("photo", JSONArray().apply{
         for(i in 0 until mediaArray.length()) {
             val media = mediaArray.getJSONObject(i)
             if (media.getString("type") == "photo") {
@@ -52,7 +52,7 @@ private fun mediaFormat(tweet: JSONObject) : JSONObject {
             }
         }
     })
-    formattedTweet.put("video", JSONArray().apply {
+    formattedMedia.put("video", JSONArray().apply {
         for (i in 0 until mediaArray.length()) {
             val media = mediaArray.getJSONObject(i)
             if (media.getString("type") == "video") {
@@ -60,7 +60,7 @@ private fun mediaFormat(tweet: JSONObject) : JSONObject {
             }
         }
     })
-    return formattedTweet
+    return formattedMedia
 }
 
 fun tweetFormat(data: JSONObject): JSONObject {
