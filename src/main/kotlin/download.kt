@@ -19,7 +19,7 @@ fun downloadImage(urlStr: String, timeOut: Int=10): InputStream? {
             DefaultLogger("downloadImage").warning(httpConnect.responseMessage)
             null
         }
-    } catch (e: IOException) {
+    } catch (e: Exception) {
         DefaultLogger("downloadImage").warning(e.toString())
         return null
     }

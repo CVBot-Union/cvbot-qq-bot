@@ -9,7 +9,6 @@ import net.mamoe.mirai.message.GroupMessageEvent
 import net.mamoe.mirai.message.data.content
 import net.mamoe.mirai.message.sendAsImageTo
 import net.mamoe.mirai.utils.*
-import org.json.JSONArray
 import org.json.JSONObject
 
 import java.io.File
@@ -70,21 +69,24 @@ suspend fun bot(
         if(dataJson["type"] == "tweet") {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
+            val translationArray = tweet.getJSONArray("translation")
             //val uri: String = dataJson.getString("uri")
 
-            var photoArray = JSONArray()
-            var videoArray = JSONArray()
-
-            if(tweet.has("media_list")) {
-                photoArray = tweet.getJSONObject("media_list").getJSONArray("photo")
-                videoArray = tweet.getJSONObject("media_list").getJSONArray("video")
-            }
+            val photoArray = tweet.getJSONObject("media_list").getJSONArray("photo")
+            val videoArray = tweet.getJSONObject("media_list").getJSONArray("video")
 
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) {
                 if (text != "") launch {
                     //text += ("\n" + uri)
                     groups.forEach { bot.getGroup(it.toLong()).sendMessage(text) }
+                }
+                if(!translationArray.isEmpty) {
+                    for(i in 0 until translationArray.length()) launch {
+                        groups.forEach {
+                            bot.getGroup(it.toLong()).sendMessage(translationArray.getString(i))
+                        }
+                    }
                 }
                 if(!photoArray.isEmpty) {
                     for(i in 0 until photoArray.length()) launch {
