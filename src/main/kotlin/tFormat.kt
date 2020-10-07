@@ -30,7 +30,7 @@ private fun textFormat(tweet: JSONObject): String {
         tweet.getString("text")
     }
     val type: String = when {
-        tweet.get("in_reply_to_status_id")!=null -> "".also { text="回复$text" }
+        !tweet.isNull("in_reply_to_status_id") -> "".also { text="回复$text" }
         tweet.has("retweeted_status") -> "\n转推:\n\n".also { text="" }
         tweet.has("quoted_status") -> "\n转推:\n\n"
         else -> ""
