@@ -21,7 +21,7 @@ suspend fun bot(
     httpServer: Javalin,
     defaultGroupId: Long=892887877L
 ) = coroutineScope {
-    val file = File("./src/main/resources/deviceInfo.json")
+    val file = File("deviceInfo.json")
     print("输入密码：")
     val password = Scanner(System.`in`).next()
     val bot = Bot(qqId,password) {
@@ -56,15 +56,15 @@ suspend fun bot(
         if(this.group.id == defaultGroupId && this.message.content == "#测试bot状态") {
             reply("在线")
             delay(200)
-            launch { File("./src/main/resources/situation.jpg").run {
+            launch { File("situation.jpg").run {
                 this.sendAsImageTo(this@subscribeAlways.group)
             } }
         }
     }
 
     httpServer.post("/") { ctx ->
-        val dataJson = JSONObject(ctx.body());
-        ctx.result("OK");
+        val dataJson = JSONObject(ctx.body())
+        ctx.result("OK")
 
         if(dataJson["type"] == "tweet") {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
@@ -115,7 +115,7 @@ suspend fun bot(
 fun main() = runBlocking {
     val qqId = 3174235713L
     try {
-        val httpServer = Javalin.create().start(1919);
+        val httpServer = Javalin.create().start(1919)
         bot(qqId, httpServer)
     } catch (e: Exception) {
         e.printStackTrace()
