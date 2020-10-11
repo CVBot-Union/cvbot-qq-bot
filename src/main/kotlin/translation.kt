@@ -45,11 +45,11 @@ fun translate(text: String): String {
             inputStreamReader = InputStreamReader(conn.inputStream, "UTF-8")
             val resJson = JSONObject(inputStreamReader.readText())
             if(resJson.has("error_code")) {
+                DefaultLogger("translation").warning(resJson.toString())
                 if(resJson.get("error_code").toString()=="54003") {
                     Thread.sleep(900)
                     translatedText = translate(text)
                 }
-                DefaultLogger("translation").warning(resJson.get("error_code").toString())
             } else {
                 translatedText = "（百度机翻参考）"
                 val result = resJson.getJSONArray("trans_result")
@@ -58,9 +58,7 @@ fun translate(text: String): String {
                 }
             }
         } else {
-            DefaultLogger("translation").warning(conn.responseCode.toString())
             DefaultLogger("translation").warning(conn.responseMessage)
-            conn.disconnect()
         }
     } catch (e: Exception) {
         e.printStackTrace()

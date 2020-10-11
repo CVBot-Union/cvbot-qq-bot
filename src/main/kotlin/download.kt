@@ -1,5 +1,4 @@
 import net.mamoe.mirai.utils.DefaultLogger
-import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -15,12 +14,11 @@ fun downloadImage(urlStr: String, timeOut: Int=10): InputStream? {
         return if (httpConnect.responseCode == 200) {
             httpConnect.inputStream
         } else {
-            DefaultLogger("downloadImage").warning("responseCode:${httpConnect.responseCode}")
             DefaultLogger("downloadImage").warning(httpConnect.responseMessage)
             null
         }
     } catch (e: Exception) {
-        DefaultLogger("downloadImage").warning(e.toString())
+        e.printStackTrace()
         return null
     }
 }

@@ -48,7 +48,7 @@ suspend fun bot(
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
 //        launch {
-//            val imgFile = File("./src/main/resources/very_spirited.jpg")
+//            val imgFile = File("very_spirited.jpg")
 //            imgFile.sendAsImageTo(bot.getGroup(defaultGroupId))
 //        }
 //    }

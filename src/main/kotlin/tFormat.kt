@@ -31,8 +31,8 @@ private fun textFormat(tweet: JSONObject): String {
     }
     val type: String = when {
         !tweet.isNull("in_reply_to_status_id") -> "".also { text="回复$text" }
-        tweet.has("retweeted_status") -> "\n转推:\n\n".also { text="" }
-        tweet.has("quoted_status") -> "\n转推:\n\n"
+        tweet.has("retweeted_status") -> "\n转推:\n".also { text="" }
+        tweet.has("quoted_status") -> "\n转推:\n"
         else -> ""
     }
     return """#$userName#
@@ -67,9 +67,11 @@ private fun transFormat(originalTweet: JSONObject): JSONArray {
 
 private fun mediaFormat(tweet: JSONObject): JSONObject {
     val formattedMedia = JSONObject()
-    val mediaArray = if(tweet.has("extended_entities")) {
-        tweet.getJSONObject("extended_entities").getJSONArray("media")
-    } else JSONArray()
+    val mediaArray = when {
+        tweet.has("retweeted_status") -> JSONArray()
+        tweet.has("extended_entities") -> tweet.getJSONObject("extended_entities").getJSONArray("media")
+        else -> JSONArray()
+    }
     var parentMedia = JSONObject()
     if(tweet.has("quoted_status")) {
         if(tweet.getJSONObject("quoted_status").has("extended_entities")) {
