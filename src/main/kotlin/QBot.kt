@@ -1,9 +1,11 @@
 import io.javalin.Javalin
+import io.javalin.core.util.RouteOverviewUtil.metaInfo
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.event.subscribeAlways
+import net.mamoe.mirai.getGroupOrNull
 import net.mamoe.mirai.join
 import net.mamoe.mirai.message.GroupMessageEvent
 import net.mamoe.mirai.message.data.content
@@ -77,29 +79,36 @@ suspend fun bot(
 
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) {
-                if (text != "") launch {
-                    //text += ("\n" + uri)
-                    groups.forEach { bot.getGroup(it.toLong()).sendMessage(text) }
-                }
-                if(!translationArray.isEmpty) {
-                    for(i in 0 until translationArray.length()) launch {
-                        groups.forEach {
-                            bot.getGroup(it.toLong()).sendMessage(translationArray.getString(i))
+                try {
+                    if (text != "") launch {
+                        //text += ("\n" + uri)
+                        groups.forEach { bot.getGroupOrNull(it.toLong())?.sendMessage(text) }
+                    }
+                    if (!translationArray.isEmpty) {
+                        for (i in 0 until translationArray.length()) launch {
+                            groups.forEach {
+                                bot.getGroupOrNull(it.toLong())?.sendMessage(translationArray.getString(i))
+                            }
                         }
                     }
-                }
-                if(!photoArray.isEmpty) {
-                    for(i in 0 until photoArray.length()) launch {
-                        val inputStream = downloadImage(photoArray.getString(i))
-                        groups.forEach { inputStream?.sendAsImageTo(bot.getGroup(it.toLong())) }
-                    }
-                }
-                if(!videoArray.isEmpty) {
-                    for(i in 0 until videoArray.length()) launch {
-                        groups.forEach {
-                            bot.getGroup(it.toLong()).sendMessage("视频下载地址：${videoArray.getString(i)}")
+                    if (!photoArray.isEmpty) {
+                        for (i in 0 until photoArray.length()) launch {
+                            val inputStream = downloadImage(photoArray.getString(i))
+                            groups.forEach {
+                                val groupId = bot.getGroupOrNull(it.toLong())
+                                if (groupId != null) inputStream?.sendAsImageTo(groupId)
+                            }
                         }
                     }
+                    if (!videoArray.isEmpty) {
+                        for (i in 0 until videoArray.length()) launch {
+                            groups.forEach {
+                                bot.getGroupOrNull(it.toLong())?.sendMessage("视频下载地址：${videoArray.getString(i)}")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         } else {
