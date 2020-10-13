@@ -1,5 +1,4 @@
 import io.javalin.Javalin
-import io.javalin.core.util.RouteOverviewUtil.metaInfo
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
@@ -9,14 +8,18 @@ import net.mamoe.mirai.getGroupOrNull
 import net.mamoe.mirai.join
 import net.mamoe.mirai.message.GroupMessageEvent
 import net.mamoe.mirai.message.data.content
+import net.mamoe.mirai.message.data.sendTo
 import net.mamoe.mirai.message.sendAsImageTo
+import net.mamoe.mirai.message.uploadAsImage
 import net.mamoe.mirai.utils.*
 import org.json.JSONObject
 
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
 import java.lang.Exception
 import java.util.*
+import kotlin.collections.ArrayList
 
 suspend fun bot(
     qqId: Long,
@@ -47,6 +50,8 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
+
+    val sampleGroup = bot.getGroup(defaultGroupId)
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
 //        launch {
@@ -78,7 +83,7 @@ suspend fun bot(
             val videoArray = tweet.getJSONObject("media_list").getJSONArray("video")
 
             val groups = tweet.getJSONArray("groups").toList() as List<String>
-            if (groups.isNotEmpty()) {
+            if (groups.isNotEmpty()) launch {
                 try {
                     if (text != "") launch {
                         //text += ("\n" + uri)
@@ -92,11 +97,18 @@ suspend fun bot(
                         }
                     }
                     if (!photoArray.isEmpty) {
-                        for (i in 0 until photoArray.length()) launch {
-                            val inputStream = downloadImage(photoArray.getString(i))
+                        val streamList: ArrayList<Deferred<InputStream?>> = ArrayList()
+                        for (i in 0 until photoArray.length()) {
+                            val inputStream = async { downloadImage(photoArray.getString(i)) }
+                            streamList.add(inputStream)
+                        }
+                        for (i in 0 until photoArray.length()) {
+                            val imageToSend = streamList[i].await()?.uploadAsImage(sampleGroup)
                             groups.forEach {
-                                val groupId = bot.getGroupOrNull(it.toLong())
-                                if (groupId != null) inputStream?.sendAsImageTo(groupId)
+                                launch {
+                                    val groupToSend = bot.getGroupOrNull(it.toLong())
+                                    if (groupToSend != null) imageToSend?.sendTo(groupToSend)
+                                }
                             }
                         }
                     }
