@@ -53,10 +53,11 @@ private fun transFormat(originalTweet: JSONObject): JSONArray {
         tweet.getString("text")
     }
     val quotedText = if(tweet.has("quoted_status")) {
-        if(tweet.getBoolean("truncated")){
-            tweet.getJSONObject("extended_tweet").getString("full_text")
+        val quotedTweet = tweet.getJSONObject("quoted_status")
+        if(quotedTweet.getBoolean("truncated")){
+            quotedTweet.getJSONObject("extended_tweet").getString("full_text")
         }else {
-            tweet.getString("text")
+            quotedTweet.getString("text")
         }
     } else ""
     return JSONArray().apply {
