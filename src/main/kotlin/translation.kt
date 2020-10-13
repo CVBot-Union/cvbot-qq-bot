@@ -8,8 +8,10 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 
 const val urlStr = "http://api.fanyi.baidu.com/api/trans/vip/translate"
-const val appId = "20201004000580074"
-private const val secret = "42rPcdFfkNiYlIrke9XZ"
+val appIds = arrayOf("20201004000580074", "20201013000588582")
+private val secrets = arrayOf("42rPcdFfkNiYlIrke9XZ", "UTWAgjaRf8zf_RRdF72N")
+
+private var count = -1
 
 fun String.md5(): String {
     val bytes = MessageDigest.getInstance("MD5").digest(this.toByteArray())
@@ -18,20 +20,28 @@ fun String.md5(): String {
 
 fun ByteArray.hex(): String = joinToString("") { "%02X".format(it) }
 
-private fun generateSign(text: String, salt: String): String = (appId+text+salt+secret).md5()
+private fun generateSign(
+        text: String,
+        salt: String,
+        appId: String,
+        secret: String
+): String = (appId+text+salt+secret).md5()
 
 fun translate(text: String): String {
     if(text=="") return ""
     var translatedText = ""
     var outputStreamWriter: OutputStreamWriter? = null
     var inputStreamReader: InputStreamReader? = null
+    count++
+    val chosenAppId = appIds[count%2]
+    val chosenSecret = secrets[count%2]
     try {
         val url = URL(urlStr)
         val conn = url.openConnection() as HttpURLConnection
         val encodedText = URLEncoder.encode(text, "UTF-8")
         val salt = System.currentTimeMillis().toString()
-        val sign = generateSign(text, salt)
-        val data = "q=$encodedText&from=auto&to=zh&appid=$appId&salt=$salt&sign=$sign"
+        val sign = generateSign(text, salt, chosenAppId, chosenSecret)
+        val data = "q=$encodedText&from=auto&to=zh&appid=$chosenAppId&salt=$salt&sign=$sign"
         conn.requestMethod = "POST"
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
@@ -47,7 +57,6 @@ fun translate(text: String): String {
             if(resJson.has("error_code")) {
                 DefaultLogger("translation").warning(resJson.toString())
                 if(resJson.get("error_code").toString()=="54003") {
-                    Thread.sleep(900)
                     translatedText = translate(text)
                 }
             } else {
