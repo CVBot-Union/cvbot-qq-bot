@@ -13,13 +13,13 @@ import net.mamoe.mirai.message.sendAsImageTo
 import net.mamoe.mirai.message.upload
 import net.mamoe.mirai.utils.*
 import org.json.JSONObject
-import java.awt.image.BufferedImage
 
 import java.io.File
 import java.io.FileInputStream
 import java.lang.Exception
 import java.util.*
-import kotlin.collections.ArrayList
+
+val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215")
 
 @ExperimentalCoroutinesApi
 suspend fun bot(
@@ -51,7 +51,8 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
-
+    //val botQQId = bot.id
+    //val botName = bot.nick
     val sampleGroup = bot.getGroup(defaultGroupId)
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
@@ -74,7 +75,8 @@ suspend fun bot(
         val dataJson = JSONObject(ctx.body())
         ctx.result("OK")
 
-        if(dataJson["type"] == "tweet") {
+        // 过滤所有单纯转推
+        if(dataJson["type"] == "tweet" && !dataJson.getJSONObject("tweet").has("retweeted_status")) {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
             val translationArray = tweet.getJSONArray("translation")
@@ -86,38 +88,34 @@ suspend fun bot(
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
                 try {
-                    if (text != "") launch {
+                    //val messageCollection: MutableCollection<ForwardMessage.INode> = mutableListOf()
+                    if (text != "") {
                         //text += ("\n" + uri)
+                        //messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(text)))
                         groups.forEach { bot.getGroupOrNull(it.toLong())?.sendMessage(text) }
                     }
                     if (!translationArray.isEmpty) {
                         for (i in 0 until translationArray.length()) launch {
                             groups.forEach {
-                                bot.getGroupOrNull(it.toLong())?.sendMessage(translationArray.getString(i))
+                                if(it !in NO_TRANSLATION)
+                                    bot.getGroupOrNull(it.toLong())?.sendMessage(translationArray.getString(i))
                             }
                         }
                     }
                     if (!photoArray.isEmpty) {
-                        val imageList: ArrayList<Deferred<BufferedImage?>> = ArrayList()
-                        for (i in 0 until photoArray.length()) {
+                        for (i in 0 until photoArray.length()) launch {
                             val bufferedImage = async { downloadImage(photoArray.getString(i)) }
-                            imageList.add(bufferedImage)
-                        }
-                        for (i in 0 until photoArray.length()) {
-                            val imageToSend = imageList[i].await()?.upload(sampleGroup)
+                            val imageToSend = bufferedImage.await()?.upload(sampleGroup)
                             groups.forEach {
-                                launch {
-                                    val groupToSend = bot.getGroupOrNull(it.toLong())
-                                    if (groupToSend != null) imageToSend?.sendTo(groupToSend)
-                                }
+                                val groupToSend = bot.getGroupOrNull(it.toLong())
+                                if (groupToSend != null) imageToSend?.sendTo(groupToSend)
+                            }
+                            // 防止BufferedImage导致内存泄漏
+                            bufferedImage.getCompleted()?.apply {
+                                graphics?.dispose()
+                                flush()
                             }
                         }
-                        // 防止BufferedImage导致内存泄漏
-                        imageList.forEach { it.getCompleted()?.apply{
-                            graphics?.dispose()
-                            flush()
-                        } }
-                        imageList.clear()
                     }
                     if (!videoArray.isEmpty) {
                         for (i in 0 until videoArray.length()) launch {
@@ -130,7 +128,7 @@ suspend fun bot(
                     e.printStackTrace()
                 }
             }
-        } else {
+        } else if(dataJson["type"] != "tweet") {
             DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
         }
     }

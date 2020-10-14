@@ -5,6 +5,7 @@ import java.util.*
 
 val dateFormatIn = SimpleDateFormat("EEE MMM dd HH:mm:ss yyyy",Locale.UK)
 val dateFormatOut = SimpleDateFormat("MM-dd HH:mm:ss",Locale.CHINA)
+val pattern = " https://t\\.co/\\w+\\Z".toRegex()
 
 fun toUTC8(createdAt: String): String {
     val timeString = createdAt.replace("+0000 ", "")
@@ -15,12 +16,14 @@ fun toUTC8(createdAt: String): String {
 private fun textFormat(tweet: JSONObject): String {
     val userName = if(tweet.has("initUserNickname")){
         tweet.getString("initUserNickname")
-    }else{ tweet.getJSONObject("user").getString("name") }
+    }else{
+        tweet.getJSONObject("user").getString("name")
+    }
 
     val time = toUTC8(tweet.getString("created_at"))
     val parentTweet = when {
         tweet.has("quoted_status") -> textFormat(tweet.getJSONObject("quoted_status"))
-        tweet.has("retweeted_status") -> textFormat(tweet.getJSONObject("retweeted_status"))
+        // tweet.has("retweeted_status") -> textFormat(tweet.getJSONObject("retweeted_status"))
         else -> ""
     }
 
@@ -29,9 +32,10 @@ private fun textFormat(tweet: JSONObject): String {
     }else{
         tweet.getString("text")
     }
+    text = pattern.replace(text, "")
     val type: String = when {
-        !tweet.isNull("in_reply_to_status_id") -> "".also { text="回复$text" }
-        tweet.has("retweeted_status") -> "\n转推:\n".also { text="" }
+        !tweet.isNull("in_reply_to_status_id") -> "".also { text="回复: $text" }
+        // tweet.has("retweeted_status") -> "\n转推:\n".also { text="" }
         tweet.has("quoted_status") -> "\n转推:\n"
         else -> ""
     }
@@ -41,12 +45,7 @@ private fun textFormat(tweet: JSONObject): String {
         |$parentTweet""".trimMargin()
 }
 
-private fun transFormat(originalTweet: JSONObject): JSONArray {
-    val tweet = if(originalTweet.has("retweeted_status")) {
-        originalTweet.getJSONObject("retweeted_status")
-    } else {
-        originalTweet
-    }
+private fun transFormat(tweet: JSONObject): JSONArray {
     val text = if(tweet.getBoolean("truncated")){
         tweet.getJSONObject("extended_tweet").getString("full_text")
     }else{
@@ -60,35 +59,25 @@ private fun transFormat(originalTweet: JSONObject): JSONArray {
             quotedTweet.getString("text")
         }
     } else ""
+    val textToTranslate = if(quotedText!="") {
+        "$text\n------\n$quotedText"
+    } else { text }
     return JSONArray().apply {
-        this.put(translate(text))
-        if(quotedText!="") this.put(translate(quotedText))
+        this.put(translate(textToTranslate))
     }
 }
 
 private fun mediaFormat(tweet: JSONObject): JSONObject {
     val formattedMedia = JSONObject()
     val mediaArray = when {
-        tweet.has("retweeted_status") -> JSONArray()
         tweet.has("extended_entities") -> tweet.getJSONObject("extended_entities").getJSONArray("media")
+        tweet.getBoolean("truncated") && tweet.getJSONObject("extended_tweet").has("extended_entities")
+        -> tweet.getJSONObject("extended_tweet").getJSONObject("extended_entities").getJSONArray("media")
         else -> JSONArray()
     }
-    var parentMedia = JSONObject()
-    if(tweet.has("quoted_status")) {
-        if(tweet.getJSONObject("quoted_status").has("extended_entities")) {
-            parentMedia = mediaFormat(tweet.getJSONObject("quoted_status"))
-        }else if(tweet.getJSONObject("quoted_status").getBoolean("truncated") &&
-                tweet.getJSONObject("quoted_status").getJSONObject("extended_tweet").has("extended_entities")) {
-            parentMedia = mediaFormat(tweet.getJSONObject("quoted_status").getJSONObject("extended_tweet"))
-        }
-    } else if(tweet.has("retweeted_status")) {
-        if(tweet.getJSONObject("retweeted_status").has("extended_entities")) {
-            parentMedia = mediaFormat(tweet.getJSONObject("retweeted_status"))
-        }else if(tweet.getJSONObject("retweeted_status").getBoolean("truncated") &&
-                tweet.getJSONObject("retweeted_status").getJSONObject("extended_tweet").has("extended_entities")) {
-            parentMedia = mediaFormat(tweet.getJSONObject("retweeted_status").getJSONObject("extended_tweet"))
-        }
-    }
+    val parentMedia = if(tweet.has("quoted_status")) {
+        mediaFormat(tweet.getJSONObject("quoted_status"))
+    } else { JSONObject() }
     formattedMedia.put("photo", JSONArray().apply{
         if(!mediaArray.isEmpty) for(i in 0 until mediaArray.length()) {
             val media = mediaArray.getJSONObject(i)
