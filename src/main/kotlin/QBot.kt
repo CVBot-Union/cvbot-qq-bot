@@ -76,7 +76,7 @@ suspend fun bot(
         ctx.result("OK")
 
         // 过滤所有单纯转推
-        if(dataJson["type"] == "tweet" && !dataJson.getJSONObject("tweet").has("retweeted_status")) {
+        if(dataJson["type"] == "tweet" && !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
             val translationArray = tweet.getJSONArray("translation")
