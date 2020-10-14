@@ -6,18 +6,17 @@ import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.event.subscribeAlways
 import net.mamoe.mirai.getGroupOrNull
 import net.mamoe.mirai.join
-import net.mamoe.mirai.message.GroupMessageEvent
-import net.mamoe.mirai.message.data.content
-import net.mamoe.mirai.message.data.sendTo
-import net.mamoe.mirai.message.sendAsImageTo
-import net.mamoe.mirai.message.upload
+import net.mamoe.mirai.message.*
+import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.*
 import org.json.JSONObject
+import java.awt.image.BufferedImage
 
 import java.io.File
 import java.io.FileInputStream
 import java.lang.Exception
 import java.util.*
+import kotlin.collections.ArrayList
 
 val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215")
 
@@ -51,8 +50,8 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
-    //val botQQId = bot.id
-    //val botName = bot.nick
+    val botQQId = bot.id
+    val botName = bot.nick
     val sampleGroup = bot.getGroup(defaultGroupId)
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
@@ -79,7 +78,7 @@ suspend fun bot(
         if(dataJson["type"] == "tweet" && !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
-            val translationArray = tweet.getJSONArray("translation")
+            val translation = tweet.getString("translation")
             //val uri: String = dataJson.getString("uri")
 
             val photoArray = tweet.getJSONObject("media_list").getJSONArray("photo")
@@ -88,41 +87,40 @@ suspend fun bot(
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
                 try {
-                    //val messageCollection: MutableCollection<ForwardMessage.INode> = mutableListOf()
+                    val messageCollection: MutableCollection<ForwardMessage.INode> = mutableListOf()
                     if (text != "") {
                         //text += ("\n" + uri)
-                        //messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(text)))
-                        groups.forEach { bot.getGroupOrNull(it.toLong())?.sendMessage(text) }
+                        messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(text)))
                     }
-                    if (!translationArray.isEmpty) {
-                        for (i in 0 until translationArray.length()) launch {
-                            groups.forEach {
-                                if(it !in NO_TRANSLATION)
-                                    bot.getGroupOrNull(it.toLong())?.sendMessage(translationArray.getString(i))
-                            }
-                        }
+                    if (translation != "") {
+                        messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(translation)))
                     }
                     if (!photoArray.isEmpty) {
-                        for (i in 0 until photoArray.length()) launch {
-                            val bufferedImage = async { downloadImage(photoArray.getString(i)) }
-                            val imageToSend = bufferedImage.await()?.upload(sampleGroup)
-                            groups.forEach {
-                                val groupToSend = bot.getGroupOrNull(it.toLong())
-                                if (groupToSend != null) imageToSend?.sendTo(groupToSend)
-                            }
-                            // 防止BufferedImage导致内存泄漏
-                            bufferedImage.getCompleted()?.apply {
-                                graphics?.dispose()
-                                flush()
+                        val fileList: ArrayList<Deferred<File?>> = ArrayList()
+                        for (i in 0 until photoArray.length()) {
+                            val imageFile = async { downloadImage(photoArray.getString(i)) }
+                            fileList.add(imageFile)
+                        }
+                        for(i in 0 until photoArray.length()) {
+                            val imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
+                            if(imageToSend != null)
+                                messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, imageToSend))
+                        }
+                        launch {
+                            fileList.forEach {
+                                // 删除临时文件
+                                it.getCompleted()?.delete()
                             }
                         }
                     }
                     if (!videoArray.isEmpty) {
-                        for (i in 0 until videoArray.length()) launch {
-                            groups.forEach {
-                                bot.getGroupOrNull(it.toLong())?.sendMessage("视频下载地址：${videoArray.getString(i)}")
-                            }
+                        for (i in 0 until videoArray.length()) {
+                            messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText("视频下载地址：${videoArray.getString(i)}")))
                         }
+                    }
+                    val forwardMessage = ForwardMessage(messageCollection)
+                    groups.forEach {
+                        launch { bot.getGroupOrNull(it.toLong())?.sendMessage(forwardMessage) }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()

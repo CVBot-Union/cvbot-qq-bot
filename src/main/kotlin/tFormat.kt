@@ -5,7 +5,7 @@ import java.util.*
 
 val dateFormatIn = SimpleDateFormat("EEE MMM dd HH:mm:ss yyyy",Locale.UK)
 val dateFormatOut = SimpleDateFormat("MM-dd HH:mm:ss",Locale.CHINA)
-val pattern = " https://t\\.co/\\w+\\Z".toRegex()
+val pattern = "https://t\\.co/\\w+\\Z".toRegex()
 
 fun toUTC8(createdAt: String): String {
     val timeString = createdAt.replace("+0000 ", "")
@@ -45,7 +45,7 @@ private fun textFormat(tweet: JSONObject): String {
         |$parentTweet""".trimMargin()
 }
 
-private fun transFormat(tweet: JSONObject): JSONArray {
+private fun transFormat(tweet: JSONObject): String {
     val text = if(tweet.getBoolean("truncated")){
         tweet.getJSONObject("extended_tweet").getString("full_text")
     }else{
@@ -62,9 +62,7 @@ private fun transFormat(tweet: JSONObject): JSONArray {
     val textToTranslate = if(quotedText!="") {
         "$text\n------\n$quotedText"
     } else { text }
-    return JSONArray().apply {
-        this.put(translate(textToTranslate))
-    }
+    return translate(textToTranslate)
 }
 
 private fun mediaFormat(tweet: JSONObject): JSONObject {
