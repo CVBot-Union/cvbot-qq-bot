@@ -10,17 +10,18 @@ import net.mamoe.mirai.message.GroupMessageEvent
 import net.mamoe.mirai.message.data.content
 import net.mamoe.mirai.message.data.sendTo
 import net.mamoe.mirai.message.sendAsImageTo
-import net.mamoe.mirai.message.uploadAsImage
+import net.mamoe.mirai.message.upload
 import net.mamoe.mirai.utils.*
 import org.json.JSONObject
+import java.awt.image.BufferedImage
 
 import java.io.File
 import java.io.FileInputStream
-import java.io.InputStream
 import java.lang.Exception
 import java.util.*
 import kotlin.collections.ArrayList
 
+@ExperimentalCoroutinesApi
 suspend fun bot(
     qqId: Long,
     httpServer: Javalin,
@@ -97,13 +98,13 @@ suspend fun bot(
                         }
                     }
                     if (!photoArray.isEmpty) {
-                        val streamList: ArrayList<Deferred<InputStream?>> = ArrayList()
+                        val imageList: ArrayList<Deferred<BufferedImage?>> = ArrayList()
                         for (i in 0 until photoArray.length()) {
-                            val inputStream = async { downloadImage(photoArray.getString(i)) }
-                            streamList.add(inputStream)
+                            val bufferedImage = async { downloadImage(photoArray.getString(i)) }
+                            imageList.add(bufferedImage)
                         }
                         for (i in 0 until photoArray.length()) {
-                            val imageToSend = streamList[i].await()?.uploadAsImage(sampleGroup)
+                            val imageToSend = imageList[i].await()?.upload(sampleGroup)
                             groups.forEach {
                                 launch {
                                     val groupToSend = bot.getGroupOrNull(it.toLong())
@@ -111,6 +112,12 @@ suspend fun bot(
                                 }
                             }
                         }
+                        // 防止BufferedImage导致内存泄漏
+                        imageList.forEach { it.getCompleted()?.apply{
+                            graphics?.dispose()
+                            flush()
+                        } }
+                        imageList.clear()
                     }
                     if (!videoArray.isEmpty) {
                         for (i in 0 until videoArray.length()) launch {
