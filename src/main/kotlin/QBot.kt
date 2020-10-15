@@ -19,15 +19,6 @@ import kotlin.collections.ArrayList
 
 val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215")
 
-val myDisplayStrategy = ForwardMessage.DisplayStrategy.Default(generatePreview = { forwardMessage ->
-    forwardMessage.nodeList.asSequence().map {
-        it.senderName + ": " +
-                if(it.message.contentToString().length>10) {
-                    it.message.contentToString().subSequence(0, 9)
-                } else { it.message.contentToString() }
-    }
-})
-
 @ExperimentalCoroutinesApi
 suspend fun bot(
     qqId: Long,
@@ -95,13 +86,14 @@ suspend fun bot(
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
                 try {
-                    val messageList: MutableList<ForwardMessage.Node> = mutableListOf()
+                    val messageList: MutableList<SingleMessage> = mutableListOf()
+                    val noTranslationMessageList: MutableList<SingleMessage> = mutableListOf()
                     if (text != "") {
                         //text += ("\n" + uri)
-                        messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, PlainText(text)))
+                        messageList.add(PlainText(text))
                     }
                     if (translation != "") {
-                        messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, PlainText(translation)))
+                        messageList.add(PlainText("\n\n$translation"))
                     }
 
                     if (!photoArray.isEmpty) {
@@ -113,7 +105,7 @@ suspend fun bot(
                         for(i in 0 until photoArray.length()) {
                             val imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
                             if(imageToSend != null)
-                                messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, imageToSend))
+                                messageList.add(imageToSend)
                         }
                         fileList.forEach {
                             // 要求jvm退出时删除临时文件
@@ -123,13 +115,26 @@ suspend fun bot(
 
                     if (!videoArray.isEmpty) {
                         for (i in 0 until videoArray.length()) {
-                            messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, PlainText("视频下载地址：${videoArray.getString(i)}")))
+                            messageList.add(PlainText("\n\n视频下载地址：${videoArray.getString(i)}"))
                         }
                     }
-                    val forwardMessage = ForwardMessage(messageList, myDisplayStrategy)
+                    if(NO_TRANSLATION.isNotEmpty()) {
+                        noTranslationMessageList.addAll(messageList)
+                        if(noTranslationMessageList[1].contentEquals("\n\n$translation")) {
+                            noTranslationMessageList.removeAt(1)
+                        }
+                    }
+                    val messageChain = messageList.asMessageChain()
+                    val noTranslationMessageChain = if(noTranslationMessageList.isNotEmpty()){
+                        noTranslationMessageList.asMessageChain()
+                    } else { null }
                     groups.forEach {
                         launch {
-                            bot.getGroupOrNull(it.toLong())?.sendMessage(forwardMessage)
+                            if(noTranslationMessageChain!=null&&(it in NO_TRANSLATION)) {
+                                bot.getGroupOrNull(it.toLong())?.sendMessage(noTranslationMessageChain)
+                            } else {
+                                bot.getGroupOrNull(it.toLong())?.sendMessage(messageChain)
+                            }
                         }
                     }
                 } catch (e: Exception) {
