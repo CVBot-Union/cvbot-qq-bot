@@ -1,5 +1,4 @@
 import io.javalin.Javalin
-import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
@@ -11,7 +10,6 @@ import net.mamoe.mirai.message.*
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.*
 import org.json.JSONObject
-import java.awt.image.BufferedImage
 
 import java.io.File
 import java.io.FileInputStream
@@ -20,6 +18,15 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215")
+
+val myDisplayStrategy = ForwardMessage.DisplayStrategy.Default(generatePreview = { forwardMessage ->
+    forwardMessage.nodeList.asSequence().map {
+        it.senderName + ": " +
+                if(it.message.contentToString().length>10) {
+                    it.message.contentToString().subSequence(0, 9)
+                } else { it.message.contentToString() }
+    }
+})
 
 @ExperimentalCoroutinesApi
 suspend fun bot(
@@ -51,8 +58,8 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
-    val botQQId = bot.id
-    val botName = bot.nick
+    val botId = bot.id
+    val botNick = bot.nick
     val sampleGroup = bot.getGroup(defaultGroupId)
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
@@ -88,13 +95,13 @@ suspend fun bot(
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
                 try {
-                    val messageCollection: MutableCollection<ForwardMessage.INode> = mutableListOf()
+                    val messageList: MutableList<ForwardMessage.Node> = mutableListOf()
                     if (text != "") {
                         //text += ("\n" + uri)
-                        messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(text)))
+                        messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, PlainText(text)))
                     }
                     if (translation != "") {
-                        messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(translation)))
+                        messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, PlainText(translation)))
                     }
 
                     if (!photoArray.isEmpty) {
@@ -106,26 +113,23 @@ suspend fun bot(
                         for(i in 0 until photoArray.length()) {
                             val imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
                             if(imageToSend != null)
-                                messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, imageToSend))
+                                messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, imageToSend))
                         }
-                        launch {
-                            fileList.forEach {
-                                // 删除临时文件
-                                it.getCompleted()?.delete()
-                            }
+                        fileList.forEach {
+                            // 要求jvm退出时删除临时文件
+                            it.getCompleted()?.deleteOnExit()
                         }
                     }
 
                     if (!videoArray.isEmpty) {
                         for (i in 0 until videoArray.length()) {
-                            messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText("视频下载地址：${videoArray.getString(i)}")))
+                            messageList.add(ForwardMessage.Node(botId, currentTimeSeconds.toInt(), botNick, PlainText("视频下载地址：${videoArray.getString(i)}")))
                         }
                     }
-                    val forwardMessage = ForwardMessage(messageCollection)
+                    val forwardMessage = ForwardMessage(messageList, myDisplayStrategy)
                     groups.forEach {
                         launch {
-                            val groupToSend = bot.getGroupOrNull(it.toLong())
-                            if(groupToSend!=null) forwardMessage.sendTo(groupToSend)
+                            bot.getGroupOrNull(it.toLong())?.sendMessage(forwardMessage)
                         }
                     }
                 } catch (e: Exception) {
