@@ -123,7 +123,10 @@ suspend fun bot(
                     }
                     val forwardMessage = ForwardMessage(messageCollection)
                     groups.forEach {
-                        launch { bot.getGroupOrNull(it.toLong())?.sendMessage(forwardMessage) }
+                        launch {
+                            val groupToSend = bot.getGroupOrNull(it.toLong())
+                            if(groupToSend!=null) forwardMessage.sendTo(groupToSend)
+                        }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
