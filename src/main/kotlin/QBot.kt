@@ -1,4 +1,5 @@
 import io.javalin.Javalin
+import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
@@ -95,6 +96,7 @@ suspend fun bot(
                     if (translation != "") {
                         messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(translation)))
                     }
+
                     if (!photoArray.isEmpty) {
                         val fileList: ArrayList<Deferred<File?>> = ArrayList()
                         for (i in 0 until photoArray.length()) {
@@ -113,6 +115,7 @@ suspend fun bot(
                             }
                         }
                     }
+
                     if (!videoArray.isEmpty) {
                         for (i in 0 until videoArray.length()) {
                             messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText("视频下载地址：${videoArray.getString(i)}")))
