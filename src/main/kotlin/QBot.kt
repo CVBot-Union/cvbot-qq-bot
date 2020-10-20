@@ -5,10 +5,10 @@ import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.event.subscribeAlways
 import net.mamoe.mirai.getGroupOrNull
-import net.mamoe.mirai.join
 import net.mamoe.mirai.message.*
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.*
+import org.json.JSONException
 import org.json.JSONObject
 
 import java.io.File
@@ -24,7 +24,7 @@ suspend fun bot(
     qqId: Long,
     httpServer: Javalin,
     defaultGroupId: Long=892887877L
-) = coroutineScope {
+): Unit = coroutineScope {
     val file = File("deviceInfo.json")
     print("输入密码：")
     val password = Scanner(System.`in`).next()
@@ -49,8 +49,6 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
-    val botId = bot.id
-    val botNick = bot.nick
     val sampleGroup = bot.getGroup(defaultGroupId)
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
@@ -70,11 +68,17 @@ suspend fun bot(
     }
 
     httpServer.post("/") { ctx ->
-        val dataJson = JSONObject(ctx.body())
+        val dataJson: JSONObject? = try {
+            JSONObject(ctx.body())
+        } catch (_: JSONException) {
+            DefaultLogger("httpServer").info(ctx.body())
+            null
+        }
         ctx.result("OK")
 
         // 过滤所有单纯转推
-        if(dataJson["type"] == "tweet" && !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
+        if (dataJson?.getString("type") == "tweet" &&
+                !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
             val translation = tweet.getString("translation")
@@ -85,81 +89,83 @@ suspend fun bot(
 
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
-                try {
-                    val messageList: MutableList<SingleMessage> = mutableListOf()
-                    val noTranslationMessageList: MutableList<SingleMessage> = mutableListOf()
-                    if (text != "") {
-                        //text += ("\n" + uri)
-                        messageList.add(PlainText(text))
-                    }
-                    if (translation != "") {
-                        messageList.add(PlainText("\n\n$translation"))
-                    }
+                val messageList: MutableList<SingleMessage> = mutableListOf()
+                val noTranslationMessageList: MutableList<SingleMessage> = mutableListOf()
+                if (text != "") {
+                    //text += ("\n" + uri)
+                    messageList.add(PlainText(text))
+                }
+                if (translation != "") {
+                    messageList.add(PlainText("\n\n$translation"))
+                }
 
-                    if (!photoArray.isEmpty) {
-                        val fileList: ArrayList<Deferred<File?>> = ArrayList()
-                        for (i in 0 until photoArray.length()) {
-                            val imageFile = async { downloadImage(photoArray.getString(i)) }
-                            fileList.add(imageFile)
-                        }
-                        for(i in 0 until photoArray.length()) {
-                            val imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
-                            if(imageToSend != null)
-                                messageList.add(imageToSend)
-                        }
-                        fileList.forEach {
-                            // 要求jvm退出时删除临时文件
-                            it.getCompleted()?.deleteOnExit()
-                        }
+                if (!photoArray.isEmpty) {
+                    val fileList: ArrayList<Deferred<File?>> = ArrayList()
+                    for (i in 0 until photoArray.length()) {
+                        val imageFile = async { downloadImage(photoArray.getString(i)) }
+                        fileList.add(imageFile)
                     }
+                    for (i in 0 until photoArray.length()) {
+                        val imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
+                        if (imageToSend != null)
+                            messageList.add(imageToSend)
+                    }
+                    fileList.forEach {
+                        // 要求jvm退出时删除临时文件
+                        it.getCompleted()?.deleteOnExit()
+                    }
+                }
 
-                    if (!videoArray.isEmpty) {
-                        for (i in 0 until videoArray.length()) {
-                            messageList.add(PlainText("\n\n视频下载地址：${videoArray.getString(i)}"))
-                        }
+                if (!videoArray.isEmpty) {
+                    for (i in 0 until videoArray.length()) {
+                        messageList.add(PlainText("\n\n视频下载地址：${videoArray.getString(i)}"))
                     }
-                    if(NO_TRANSLATION.isNotEmpty()) {
-                        noTranslationMessageList.addAll(messageList)
-                        if(noTranslationMessageList[1].contentEquals("\n\n$translation")) {
-                            noTranslationMessageList.removeAt(1)
-                        }
+                }
+                if (NO_TRANSLATION.isNotEmpty()) {
+                    noTranslationMessageList.addAll(messageList)
+                    if (noTranslationMessageList[1].contentEquals("\n\n$translation")) {
+                        noTranslationMessageList.removeAt(1)
                     }
-                    val messageChain = messageList.asMessageChain()
-                    val noTranslationMessageChain = if(noTranslationMessageList.isNotEmpty()){
-                        noTranslationMessageList.asMessageChain()
-                    } else { null }
-                    groups.forEach {
-                        launch {
-                            if(noTranslationMessageChain!=null&&(it in NO_TRANSLATION)) {
+                }
+                val messageChain = messageList.asMessageChain()
+                val noTranslationMessageChain = if (noTranslationMessageList.isNotEmpty()) {
+                    noTranslationMessageList.asMessageChain()
+                } else {
+                    null
+                }
+                groups.forEach {
+                    launch {
+                        try {
+                            if (noTranslationMessageChain != null && (it in NO_TRANSLATION)) {
                                 bot.getGroupOrNull(it.toLong())?.sendMessage(noTranslationMessageChain)
                             } else {
                                 bot.getGroupOrNull(it.toLong())?.sendMessage(messageChain)
                             }
+                        } catch(_: IllegalStateException) {
+                            // ignore
                         }
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
+            } else if (dataJson["type"] != "tweet") {
+                DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
             }
-        } else if(dataJson["type"] != "tweet") {
-            DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
         }
     }
-
-    withContext(NonCancellable) { bot.join() }
 }
 
 @ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
 fun main() = runBlocking {
-    val qqId = 3174235713L
-    try {
-        val httpServer = Javalin.create().start(1919)
-        bot(qqId, httpServer)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    } finally {
+    while(true) {
+        val qqId = 3174235713L
+        try {
+            val httpServer = Javalin.create().start(1919)
+            bot(qqId, httpServer)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         coroutineContext.cancelChildren()
         DefaultLogger(qqId.toString()).info("bot已下线")
+        System.gc()
     }
 }

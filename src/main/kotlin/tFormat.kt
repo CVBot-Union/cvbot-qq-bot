@@ -5,7 +5,7 @@ import java.util.*
 
 val dateFormatIn = SimpleDateFormat("EEE MMM dd HH:mm:ss yyyy",Locale.UK)
 val dateFormatOut = SimpleDateFormat("MM-dd HH:mm:ss",Locale.CHINA)
-val regex = "https://t\\.co/\\w+\\s*\\Z".toRegex()
+val regex = "\n*https://t\\.co/\\w+\\s*\\Z".toRegex()
 
 fun toUTC8(createdAt: String): String {
     val timeString = createdAt.replace("+0000 ", "")
@@ -36,7 +36,7 @@ private fun textFormat(tweet: JSONObject): String {
     val type: String = when {
         !tweet.isNull("in_reply_to_status_id") -> "".also { text="回复: $text" }
         // tweet.has("retweeted_status") -> "\n转推:\n".also { text="" }
-        tweet.has("quoted_status") -> "\n转推:\n"
+        tweet.has("quoted_status") -> "\n---转推---\n"
         else -> ""
     }
     return """#$userName#
