@@ -22,12 +22,11 @@ val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215"
 @ExperimentalCoroutinesApi
 suspend fun bot(
     qqId: Long,
+    password: String,
     httpServer: Javalin,
     defaultGroupId: Long=892887877L
 ): Unit = coroutineScope {
     val file = File("deviceInfo.json")
-    print("输入密码：")
-    val password = Scanner(System.`in`).next()
     val bot = Bot(qqId,password) {
         if(file.exists()) {
             val fis = FileInputStream(file)
@@ -111,8 +110,8 @@ suspend fun bot(
                             messageList.add(imageToSend)
                     }
                     fileList.forEach {
-                        // 要求jvm退出时删除临时文件
-                        it.getCompleted()?.deleteOnExit()
+                        // 删除临时文件
+                        it.getCompleted()?.delete()
                     }
                 }
 
@@ -156,11 +155,13 @@ suspend fun bot(
 @ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
 fun main() = runBlocking {
+    val qqId = 3174235713L
+    val httpServer = Javalin.create().start(1919)
+    print("输入QQ${qqId}的密码：")
+    val password = Scanner(System.`in`).next()
     while(true) {
-        val qqId = 3174235713L
         try {
-            val httpServer = Javalin.create().start(1919)
-            bot(qqId, httpServer)
+            bot(qqId, password, httpServer)
         } catch (e: Exception) {
             e.printStackTrace()
         }
