@@ -1,35 +1,31 @@
 import io.javalin.Javalin
 import kotlinx.coroutines.*
-import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.event.subscribeAlways
 import net.mamoe.mirai.getGroupOrNull
-import net.mamoe.mirai.join
-import net.mamoe.mirai.message.GroupMessageEvent
-import net.mamoe.mirai.message.data.content
-import net.mamoe.mirai.message.data.sendTo
-import net.mamoe.mirai.message.sendAsImageTo
-import net.mamoe.mirai.message.upload
+import net.mamoe.mirai.message.*
+import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.*
+import org.json.JSONException
 import org.json.JSONObject
 
 import java.io.File
 import java.io.FileInputStream
 import java.lang.Exception
 import java.util.*
+import kotlin.collections.ArrayList
 
 val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215")
 
 @ExperimentalCoroutinesApi
 suspend fun bot(
     qqId: Long,
+    password: String,
     httpServer: Javalin,
     defaultGroupId: Long=892887877L
-) = coroutineScope {
+): Unit = coroutineScope {
     val file = File("deviceInfo.json")
-    print("输入密码：")
-    val password = Scanner(System.`in`).next()
     val bot = Bot(qqId,password) {
         if(file.exists()) {
             val fis = FileInputStream(file)
@@ -42,7 +38,7 @@ suspend fun bot(
             deviceInfo = { context ->
                 SystemDeviceInfo(context).also { info ->
                     launch {
-                        val jsonEle: JsonElement = json.encodeToJsonElement(SystemDeviceInfo.serializer(), info)
+                        val jsonEle = json.encodeToJsonElement(SystemDeviceInfo.serializer(), info)
                         file.writeText(jsonEle.toString())
                     }
                 }
@@ -51,8 +47,6 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
-    //val botQQId = bot.id
-    //val botName = bot.nick
     val sampleGroup = bot.getGroup(defaultGroupId)
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
@@ -72,14 +66,20 @@ suspend fun bot(
     }
 
     httpServer.post("/") { ctx ->
-        val dataJson = JSONObject(ctx.body())
+        val dataJson: JSONObject? = try {
+            JSONObject(ctx.body())
+        } catch (_: JSONException) {
+            DefaultLogger("httpServer").info(ctx.body())
+            null
+        }
         ctx.result("OK")
 
         // 过滤所有单纯转推
-        if(dataJson["type"] == "tweet" && !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
+        if (dataJson?.getString("type") == "tweet" &&
+                !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
-            val translationArray = tweet.getJSONArray("translation")
+            val translation = tweet.getString("translation")
             //val uri: String = dataJson.getString("uri")
 
             val photoArray = tweet.getJSONObject("media_list").getJSONArray("photo")
@@ -87,66 +87,86 @@ suspend fun bot(
 
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
-                try {
-                    //val messageCollection: MutableCollection<ForwardMessage.INode> = mutableListOf()
-                    if (text != "") {
-                        //text += ("\n" + uri)
-                        //messageCollection.add(ForwardMessage.Node(botQQId, currentTimeSeconds.toInt(), botName, PlainText(text)))
-                        groups.forEach { bot.getGroupOrNull(it.toLong())?.sendMessage(text) }
-                    }
-                    if (!translationArray.isEmpty) {
-                        for (i in 0 until translationArray.length()) launch {
-                            groups.forEach {
-                                if(it !in NO_TRANSLATION)
-                                    bot.getGroupOrNull(it.toLong())?.sendMessage(translationArray.getString(i))
-                            }
-                        }
-                    }
-                    if (!photoArray.isEmpty) {
-                        for (i in 0 until photoArray.length()) launch {
-                            val bufferedImage = async { downloadImage(photoArray.getString(i)) }
-                            val imageToSend = bufferedImage.await()?.upload(sampleGroup)
-                            groups.forEach {
-                                val groupToSend = bot.getGroupOrNull(it.toLong())
-                                if (groupToSend != null) imageToSend?.sendTo(groupToSend)
-                            }
-                            // 防止BufferedImage导致内存泄漏
-                            bufferedImage.getCompleted()?.apply {
-                                graphics?.dispose()
-                                flush()
-                            }
-                        }
-                    }
-                    if (!videoArray.isEmpty) {
-                        for (i in 0 until videoArray.length()) launch {
-                            groups.forEach {
-                                bot.getGroupOrNull(it.toLong())?.sendMessage("视频下载地址：${videoArray.getString(i)}")
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                val messageList: MutableList<SingleMessage> = mutableListOf()
+                val noTranslationMessageList: MutableList<SingleMessage> = mutableListOf()
+                if (text != "") {
+                    //text += ("\n" + uri)
+                    messageList.add(PlainText(text))
                 }
+                if (translation != "") {
+                    messageList.add(PlainText("\n\n$translation"))
+                }
+
+                if (!photoArray.isEmpty) {
+                    val fileList: ArrayList<Deferred<File?>> = ArrayList()
+                    for (i in 0 until photoArray.length()) {
+                        val imageFile = async { downloadImage(photoArray.getString(i)) }
+                        fileList.add(imageFile)
+                    }
+                    for (i in 0 until photoArray.length()) {
+                        val imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
+                        if (imageToSend != null)
+                            messageList.add(imageToSend)
+                    }
+                    fileList.forEach {
+                        // 删除临时文件
+                        it.getCompleted()?.delete()
+                    }
+                }
+
+                if (!videoArray.isEmpty) {
+                    for (i in 0 until videoArray.length()) {
+                        messageList.add(PlainText("\n\n视频下载地址：${videoArray.getString(i)}"))
+                    }
+                }
+                if (NO_TRANSLATION.isNotEmpty()) {
+                    noTranslationMessageList.addAll(messageList)
+                    if (noTranslationMessageList[1].contentEquals("\n\n$translation")) {
+                        noTranslationMessageList.removeAt(1)
+                    }
+                }
+                val messageChain = messageList.asMessageChain()
+                val noTranslationMessageChain = if (noTranslationMessageList.isNotEmpty()) {
+                    noTranslationMessageList.asMessageChain()
+                } else {
+                    null
+                }
+                groups.forEach {
+                    launch {
+                        try {
+                            if (noTranslationMessageChain != null && (it in NO_TRANSLATION)) {
+                                bot.getGroupOrNull(it.toLong())?.sendMessage(noTranslationMessageChain)
+                            } else {
+                                bot.getGroupOrNull(it.toLong())?.sendMessage(messageChain)
+                            }
+                        } catch(_: IllegalStateException) {
+                            // ignore
+                        }
+                    }
+                }
+            } else if (dataJson["type"] != "tweet") {
+                DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
             }
-        } else if(dataJson["type"] != "tweet") {
-            DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
         }
     }
-
-    withContext(NonCancellable) { bot.join() }
 }
 
 @ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
 fun main() = runBlocking {
     val qqId = 3174235713L
-    try {
+    print("输入QQ${qqId}的密码：")
+    val password = Scanner(System.`in`).next()
+    while(true) {
         val httpServer = Javalin.create().start(1919)
-        bot(qqId, httpServer)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    } finally {
+        try {
+            bot(qqId, password, httpServer)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        httpServer.stop()
         coroutineContext.cancelChildren()
         DefaultLogger(qqId.toString()).info("bot已下线")
+        System.gc()
     }
 }
