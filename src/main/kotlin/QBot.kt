@@ -1,6 +1,5 @@
 import io.javalin.Javalin
 import kotlinx.coroutines.*
-import kotlinx.serialization.json.JsonElement
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.event.subscribeAlways
@@ -39,7 +38,7 @@ suspend fun bot(
             deviceInfo = { context ->
                 SystemDeviceInfo(context).also { info ->
                     launch {
-                        val jsonEle: JsonElement = json.encodeToJsonElement(SystemDeviceInfo.serializer(), info)
+                        val jsonEle = json.encodeToJsonElement(SystemDeviceInfo.serializer(), info)
                         file.writeText(jsonEle.toString())
                     }
                 }
@@ -156,15 +155,16 @@ suspend fun bot(
 @ExperimentalCoroutinesApi
 fun main() = runBlocking {
     val qqId = 3174235713L
-    val httpServer = Javalin.create().start(1919)
     print("输入QQ${qqId}的密码：")
     val password = Scanner(System.`in`).next()
     while(true) {
+        val httpServer = Javalin.create().start(1919)
         try {
             bot(qqId, password, httpServer)
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        httpServer.stop()
         coroutineContext.cancelChildren()
         DefaultLogger(qqId.toString()).info("bot已下线")
         System.gc()
