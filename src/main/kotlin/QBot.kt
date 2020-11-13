@@ -19,7 +19,7 @@ import kotlin.collections.ArrayList
 val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215")
 
 @ExperimentalCoroutinesApi
-suspend fun bot(
+suspend fun launchBot(
     qqId: Long,
     password: String,
     httpServer: Javalin,
@@ -47,6 +47,7 @@ suspend fun bot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
+    val myLogger = bot.logger+SingleFileLogger(qqId.toString())
     val sampleGroup = bot.getGroup(defaultGroupId)
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
@@ -69,7 +70,7 @@ suspend fun bot(
         val dataJson: JSONObject? = try {
             JSONObject(ctx.body())
         } catch (_: JSONException) {
-            DefaultLogger("httpServer").info(ctx.body())
+            myLogger.info("httpServer: "+ctx.body())
             null
         }
         ctx.result("OK")
@@ -139,13 +140,13 @@ suspend fun bot(
                             } else {
                                 bot.getGroupOrNull(it.toLong())?.sendMessage(messageChain)
                             }
-                        } catch(_: IllegalStateException) {
-                            // ignore
+                        } catch(e: Exception) {
+                            myLogger.error(e.toString())
                         }
                     }
                 }
             } else if (dataJson["type"] != "tweet") {
-                DefaultLogger(qqId.toString()).info(dataJson["data"].toString())
+                myLogger.info(dataJson["data"].toString())
             }
         }
     }
@@ -160,7 +161,7 @@ fun main() = runBlocking {
     while(true) {
         val httpServer = Javalin.create().start(1919)
         try {
-            bot(qqId, password, httpServer)
+            launchBot(qqId, password, httpServer)
         } catch (e: Exception) {
             e.printStackTrace()
         }
