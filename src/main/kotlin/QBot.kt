@@ -3,16 +3,13 @@ import kotlinx.coroutines.*
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.event.subscribeAlways
-import net.mamoe.mirai.getGroupOrNull
 import net.mamoe.mirai.message.*
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.*
 import org.json.JSONException
 import org.json.JSONObject
-
 import java.io.File
 import java.io.FileInputStream
-import java.lang.Exception
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -76,8 +73,8 @@ suspend fun launchBot(
         ctx.result("OK")
 
         // 过滤所有单纯转推
-        if (dataJson?.getString("type") == "tweet" &&
-                !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
+        if (dataJson?.getString("type") == "tweet" && !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
+            myLogger.info("got tweet "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
             val translation = tweet.getString("translation")
@@ -147,8 +144,10 @@ suspend fun launchBot(
                     }
                 }
             } else {
-                myLogger.info(dataJson["data"].toString())
+                myLogger.info("no groups to send: "+dataJson["data"].toString())
             }
+        } else {
+            myLogger.info(dataJson?.get("data").toString())
         }
     }
 }
