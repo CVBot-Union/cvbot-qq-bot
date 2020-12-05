@@ -5,7 +5,7 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-fun downloadImage(urlStr: String, timeOut: Int=10): File? {
+fun downloadImage(urlStr: String, timeOut: Int=10, retry: Boolean=true): File? {
     try {
         //val addr = InetSocketAddress("127.0.0.1", 10809)
         //val proxy = Proxy(Proxy.Type.HTTP, addr) // http 代理
@@ -22,10 +22,14 @@ fun downloadImage(urlStr: String, timeOut: Int=10): File? {
         } else {
             DefaultLogger("downloadImage").warning(httpConnect.responseMessage)
             httpConnect.inputStream.close()
-            null
+            if(retry) {
+                downloadImage(urlStr, 10, false)
+            } else null
         }
     } catch (e: Exception) {
-        e.printStackTrace()
-        return null
+        DefaultLogger("downloadImage").warning(e.toString())
+        return if(retry) {
+            downloadImage(urlStr, 10, false)
+        } else null
     }
 }

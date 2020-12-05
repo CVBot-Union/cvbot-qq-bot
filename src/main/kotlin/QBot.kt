@@ -16,7 +16,7 @@ import java.lang.Exception
 import java.util.*
 import kotlin.collections.ArrayList
 
-val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215")
+val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215", "252047639", "783541028")
 
 @ExperimentalCoroutinesApi
 suspend fun launchBot(
@@ -105,13 +105,14 @@ suspend fun launchBot(
                         fileList.add(imageFile)
                     }
                     for (i in 0 until photoArray.length()) {
-                        val imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
-                        if (imageToSend != null)
-                            messageList.add(imageToSend)
-                    }
-                    fileList.forEach {
-                        // 删除临时文件
-                        it.getCompleted()?.delete()
+                        var imageToSend: Image? = null
+                        var retry = 0
+                        while (imageToSend == null && retry<3) {
+                            imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
+                            retry += 1
+                        }
+                        if(imageToSend != null) { messageList.add(imageToSend) }
+                        else { myLogger.error("image upload failed") }
                     }
                 }
 
@@ -136,16 +137,16 @@ suspend fun launchBot(
                     launch {
                         try {
                             if (noTranslationMessageChain != null && (it in NO_TRANSLATION)) {
-                                bot.getGroupOrNull(it.toLong())?.sendMessage(noTranslationMessageChain)
+                                bot.getGroup(it.toLong()).sendMessage(noTranslationMessageChain)
                             } else {
-                                bot.getGroupOrNull(it.toLong())?.sendMessage(messageChain)
+                                bot.getGroup(it.toLong()).sendMessage(messageChain)
                             }
                         } catch(e: Exception) {
                             myLogger.error(e.toString())
                         }
                     }
                 }
-            } else if (dataJson["type"] != "tweet") {
+            } else {
                 myLogger.info(dataJson["data"].toString())
             }
         }
