@@ -3,6 +3,7 @@ import kotlinx.coroutines.*
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.alsoLogin
 import net.mamoe.mirai.event.subscribeAlways
+import net.mamoe.mirai.getGroupOrNull
 import net.mamoe.mirai.message.*
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.*
@@ -44,8 +45,7 @@ suspend fun launchBot(
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
         inheritCoroutineContext()
     }.alsoLogin()
-    val myLogger = bot.logger+SingleFileLogger(qqId.toString())
-    val sampleGroup = bot.getGroup(defaultGroupId)
+    bot.logger.follower = SingleFileLogger(qqId.toString())
 //    if(bot.isOnline) {
 //        bot.getGroup(defaultGroupId).sendMessage("bot已上线")
 //        launch {
@@ -67,14 +67,14 @@ suspend fun launchBot(
         val dataJson: JSONObject? = try {
             JSONObject(ctx.body())
         } catch (_: JSONException) {
-            myLogger.info("httpServer: "+ctx.body())
+            bot.logger.info("httpServer: "+ctx.body())
             null
         }
         ctx.result("OK")
 
         // 过滤所有单纯转推
         if (dataJson?.getString("type") == "tweet" && !dataJson.getJSONObject("data").getJSONObject("tweet").has("retweeted_status")) {
-            myLogger.info("got tweet "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
+            bot.logger.info("got tweet "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
             val tweet = tweetFormat(dataJson.getJSONObject("data"))
             val text: String = tweet.getString("text")
             val translation = tweet.getString("translation")
@@ -85,6 +85,7 @@ suspend fun launchBot(
 
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
+                val fileList: ArrayList<Deferred<File?>> = ArrayList()
                 val messageList: MutableList<SingleMessage> = mutableListOf()
                 val noTranslationMessageList: MutableList<SingleMessage> = mutableListOf()
                 if (text != "") {
@@ -96,20 +97,27 @@ suspend fun launchBot(
                 }
 
                 if (!photoArray.isEmpty) {
-                    val fileList: ArrayList<Deferred<File?>> = ArrayList()
                     for (i in 0 until photoArray.length()) {
                         val imageFile = async { downloadImage(photoArray.getString(i)) }
                         fileList.add(imageFile)
                     }
-                    for (i in 0 until photoArray.length()) {
-                        var imageToSend: Image? = null
-                        var retry = 0
-                        while (imageToSend == null && retry<3) {
-                            imageToSend = fileList[i].await()?.uploadAsImage(sampleGroup)
-                            retry += 1
+                    groups.forEach {
+                        val thisGroup = bot.getGroupOrNull(it.toLong())
+                        if(thisGroup != null) {
+                            for (i in 0 until photoArray.length()) {
+                                var imageToSend: Image? = null
+                                var retry = 0
+                                while (imageToSend == null && retry < 3) {
+                                    imageToSend = fileList[i].await()?.uploadAsImage(thisGroup)
+                                    retry += 1
+                                }
+                                if (imageToSend != null) {
+                                    messageList.add(imageToSend)
+                                } else {
+                                    bot.logger.error("image upload to group $it failed")
+                                }
+                            }
                         }
-                        if(imageToSend != null) { messageList.add(imageToSend) }
-                        else { myLogger.error("image upload failed") }
                     }
                 }
 
@@ -133,21 +141,22 @@ suspend fun launchBot(
                 groups.forEach {
                     launch {
                         try {
+                            val thisGroup = bot.getGroup(it.toLong())
                             if (noTranslationMessageChain != null && (it in NO_TRANSLATION)) {
-                                bot.getGroup(it.toLong()).sendMessage(noTranslationMessageChain)
+                                thisGroup.sendMessage(noTranslationMessageChain)
                             } else {
-                                bot.getGroup(it.toLong()).sendMessage(messageChain)
+                                thisGroup.sendMessage(messageChain)
                             }
                         } catch(e: Exception) {
-                            myLogger.error(e.toString())
+                            bot.logger.error(e.toString())
                         }
                     }
                 }
             } else {
-                myLogger.info("no groups to send: "+dataJson["data"].toString())
+                bot.logger.info("no groups to send: "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
             }
-        } else {
-            myLogger.info(dataJson?.get("data").toString())
+        } else if(dataJson != null) {
+            bot.logger.info("ignored tweet "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
         }
     }
 }
