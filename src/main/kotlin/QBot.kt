@@ -101,22 +101,28 @@ suspend fun launchBot(
                         val imageFile = async { downloadImage(photoArray.getString(i)) }
                         fileList.add(imageFile)
                     }
-                    groups.forEach {
-                        val thisGroup = bot.getGroupOrNull(it.toLong())
-                        if(thisGroup != null) {
-                            for (i in 0 until photoArray.length()) {
-                                var imageToSend: Image? = null
+                    for (i in 0 until photoArray.length()) {
+                        var photo: Image? = null
+                        groups.forEach {
+                            val thisGroup = bot.getGroupOrNull(it.toLong())
+                            if(thisGroup != null) {
                                 var retry = 0
+                                var imageToSend: Image? = null
                                 while (imageToSend == null && retry < 3) {
                                     imageToSend = fileList[i].await()?.uploadAsImage(thisGroup)
                                     retry += 1
                                 }
-                                if (imageToSend != null) {
-                                    messageList.add(imageToSend)
-                                } else {
+                                if(imageToSend==null) {
                                     bot.logger.error("image upload to group $it failed")
+                                } else {
+                                    photo = imageToSend
                                 }
                             }
+                        }
+                        if (photo != null) {
+                            messageList.add(photo!!)
+                        } else {
+                            bot.logger.error("image upload failed on tweet "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
                         }
                     }
                 }

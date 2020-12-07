@@ -20,7 +20,9 @@ fun textModify(text: String, urls: JSONArray): String {
             .replace("&lt;", "<")
             .replace("&gt;", ">")
     urls.forEach { it as JSONObject
-        htmlDecodedText = htmlDecodedText.replace(it.getString("url"), it.getString("expanded_url"))
+        val expandedUrl = it.getString("expanded_url")
+        htmlDecodedText = htmlDecodedText.replace(it.getString("url"), expandedUrl)
+        // if(expandedUrl.contains("tiktok.com")) val videoFile = TiktokHandler(expandedUrl).fetchVideo()
     }
     return tcoRegex.replace(htmlDecodedText, "")
 }
