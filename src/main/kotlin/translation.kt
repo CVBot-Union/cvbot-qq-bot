@@ -1,4 +1,4 @@
-import net.mamoe.mirai.utils.DefaultLogger
+import net.mamoe.mirai.utils.MiraiLogger
 import org.json.JSONObject
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -12,6 +12,8 @@ val appIds = arrayOf("20201004000580074", "20201013000588582")
 private val secrets = arrayOf("42rPcdFfkNiYlIrke9XZ", "UTWAgjaRf8zf_RRdF72N")
 
 private var count = -1
+
+val transLogger = MiraiLogger.create("translation")
 
 fun String.md5(): String {
     val bytes = MessageDigest.getInstance("MD5").digest(this.toByteArray())
@@ -55,25 +57,25 @@ fun translate(text: String): String {
             inputStreamReader = InputStreamReader(conn.inputStream, "UTF-8")
             val resJson = JSONObject(inputStreamReader.readText())
             if(resJson.has("error_code")) {
-                DefaultLogger("translation").warning(resJson.toString())
+                transLogger.warning(resJson.toString())
                 if(resJson.get("error_code").toString()=="54003") {
                     translatedText = translate(text)
                 }
             } else {
-                translatedText = "（百度机翻参考）"
+                translatedText = " [百度机翻参考] "
                 val result = resJson.getJSONArray("trans_result")
                 for(i in 0 until result.length()) {
                     translatedText += ("\n"+result.getJSONObject(i).getString("dst"))
                 }
             }
         } else {
-            DefaultLogger("translation").warning(conn.responseMessage)
+            transLogger.warning(conn.responseMessage)
         }
     } catch (e: Exception) {
         e.printStackTrace()
     } finally {
         outputStreamWriter?.close()
         inputStreamReader?.close()
-        return translatedText
     }
+    return translatedText
 }

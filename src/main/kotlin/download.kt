@@ -1,9 +1,11 @@
-import net.mamoe.mirai.utils.DefaultLogger
+import net.mamoe.mirai.utils.MiraiLogger
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+
+val downloadLogger = MiraiLogger.create("downloadImage")
 
 fun downloadImage(urlStr: String, timeOut: Int=10, retry: Boolean=true): File? {
     try {
@@ -15,19 +17,19 @@ fun downloadImage(urlStr: String, timeOut: Int=10, retry: Boolean=true): File? {
         httpConnect.requestMethod = "GET"
         httpConnect.setRequestProperty("Accept", "image/*")
         return if (httpConnect.responseCode == 200) {
-            val file = createTempFile("qbot_tmp")
+            val file = File.createTempFile("qbot_tmp", null)
             Files.copy(httpConnect.inputStream, file.toPath(), StandardCopyOption.REPLACE_EXISTING)
             httpConnect.inputStream.close()
             file
         } else {
-            DefaultLogger("downloadImage").warning(httpConnect.responseMessage)
+            downloadLogger.warning(httpConnect.responseMessage)
             httpConnect.inputStream.close()
             if(retry) {
                 downloadImage(urlStr, 10, false)
             } else null
         }
     } catch (e: Exception) {
-        DefaultLogger("downloadImage").warning(e.toString())
+        downloadLogger.warning(e.toString())
         return if(retry) {
             downloadImage(urlStr, 10, false)
         } else null

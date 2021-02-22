@@ -1,18 +1,16 @@
 import io.javalin.Javalin
 import kotlinx.coroutines.*
-import net.mamoe.mirai.Bot
+import net.mamoe.mirai.BotFactory
 import net.mamoe.mirai.alsoLogin
-import net.mamoe.mirai.event.subscribeAlways
-import net.mamoe.mirai.getGroupOrNull
-import net.mamoe.mirai.message.*
+import net.mamoe.mirai.contact.Contact.Companion.sendImage
+import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.*
+import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
-import java.io.FileInputStream
 import java.util.*
-import kotlin.collections.ArrayList
 
 val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215", "252047639", "783541028")
 
@@ -23,27 +21,9 @@ suspend fun launchBot(
     httpServer: Javalin,
     defaultGroupId: Long=892887877L
 ): Unit = coroutineScope {
-    val file = File("deviceInfo.json")
-    val bot = Bot(qqId,password) {
-        if(file.exists()) {
-            val fis = FileInputStream(file)
-            val jsonString = String(fis.readAllBytes())
-            fis.close()
-            deviceInfo = { context ->
-                json.decodeFromString(SystemDeviceInfo.serializer(), jsonString).also {it.context = context}
-            }
-        } else {
-            deviceInfo = { context ->
-                SystemDeviceInfo(context).also { info ->
-                    launch {
-                        val jsonEle = json.encodeToJsonElement(SystemDeviceInfo.serializer(), info)
-                        file.writeText(jsonEle.toString())
-                    }
-                }
-            }
-        }
-        protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线，为默认值
-        inheritCoroutineContext()
+    val bot = BotFactory.newBot(qqId,password) {
+        fileBasedDeviceInfo("deviceInfo.json")
+        protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线
     }.alsoLogin()
     bot.logger.follower = SingleFileLogger(qqId.toString())
 //    if(bot.isOnline) {
@@ -53,13 +33,11 @@ suspend fun launchBot(
 //            imgFile.sendAsImageTo(bot.getGroup(defaultGroupId))
 //        }
 //    }
-    bot.subscribeAlways<GroupMessageEvent> {
-        if(this.group.id == defaultGroupId && this.message.content == "#测试bot状态") {
-            reply("在线")
+    bot.eventChannel.subscribeAlways<GroupMessageEvent> {
+        if(subject.id == defaultGroupId && this.message.content == "#测试bot状态") {
+            subject.sendMessage("在线")
             delay(200)
-            launch { File("situation.jpg").run {
-                this.sendAsImageTo(this@subscribeAlways.group)
-            } }
+            launch { subject.sendImage(File("situation.jpg")) }
         }
     }
 
@@ -85,7 +63,7 @@ suspend fun launchBot(
 
             val groups = tweet.getJSONArray("groups").toList() as List<String>
             if (groups.isNotEmpty()) launch {
-                val fileList: ArrayList<Deferred<File?>> = ArrayList()
+                val deferredFileList: ArrayList<Deferred<File?>> = ArrayList()
                 val messageList: MutableList<SingleMessage> = mutableListOf()
                 val noTranslationMessageList: MutableList<SingleMessage> = mutableListOf()
                 if (text != "") {
@@ -99,17 +77,17 @@ suspend fun launchBot(
                 if (!photoArray.isEmpty) {
                     for (i in 0 until photoArray.length()) {
                         val imageFile = async { downloadImage(photoArray.getString(i)) }
-                        fileList.add(imageFile)
+                        deferredFileList.add(imageFile)
                     }
                     for (i in 0 until photoArray.length()) {
                         var photo: Image? = null
                         groups.forEach {
-                            val thisGroup = bot.getGroupOrNull(it.toLong())
+                            val thisGroup = bot.getGroup(it.toLong())
                             if(thisGroup != null) {
                                 var retry = 0
                                 var imageToSend: Image? = null
                                 while (imageToSend == null && retry < 3) {
-                                    imageToSend = fileList[i].await()?.uploadAsImage(thisGroup)
+                                    imageToSend = deferredFileList[i].await()?.uploadAsImage(thisGroup)
                                     retry += 1
                                 }
                                 if(imageToSend==null) {
@@ -138,16 +116,16 @@ suspend fun launchBot(
                         noTranslationMessageList.removeAt(1)
                     }
                 }
-                val messageChain = messageList.asMessageChain()
+                val messageChain = messageList.toMessageChain()
                 val noTranslationMessageChain = if (noTranslationMessageList.isNotEmpty()) {
-                    noTranslationMessageList.asMessageChain()
+                    noTranslationMessageList.toMessageChain()
                 } else {
                     null
                 }
                 groups.forEach {
                     launch {
                         try {
-                            val thisGroup = bot.getGroup(it.toLong())
+                            val thisGroup = bot.getGroupOrFail(it.toLong())
                             if (noTranslationMessageChain != null && (it in NO_TRANSLATION)) {
                                 thisGroup.sendMessage(noTranslationMessageChain)
                             } else {
@@ -167,7 +145,6 @@ suspend fun launchBot(
     }
 }
 
-@ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
 fun main() = runBlocking {
     val qqId = 3174235713L
@@ -182,7 +159,7 @@ fun main() = runBlocking {
         }
         httpServer.stop()
         coroutineContext.cancelChildren()
-        DefaultLogger(qqId.toString()).info("bot已下线")
+        MiraiLogger.create(qqId.toString()).info("bot已下线")
         System.gc()
     }
 }

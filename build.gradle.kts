@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.4.10"
-    kotlin("plugin.serialization") version "1.4.10"
+    kotlin("jvm") version "1.4.30"
+    kotlin("plugin.serialization") version "1.4.30"
 }
 group = "com.cvbotunion"
 version = "2.0"
@@ -15,9 +15,9 @@ repositories {
 dependencies {
     testImplementation(kotlin("test-junit"))
     implementation("org.json:json:20200518")
-    implementation("net.mamoe:mirai-core-qqandroid:1.3.3")
+    implementation("net.mamoe:mirai-core:2.4.0")
     implementation("io.javalin:javalin:3.10.1")
-    implementation("net.mamoe","kotlin-jvm-blocking-bridge-jvm","1.1.0")
+    implementation("net.mamoe","kotlin-jvm-blocking-bridge-jvm","1.10.0")
     implementation("org.jetbrains.kotlinx", "kotlinx-serialization-protobuf", "1.0.1")
     implementation("org.jetbrains.kotlinx", "kotlinx-serialization-json", "1.0.1")
     implementation("org.jetbrains.kotlinx","kotlinx-coroutines-io","0.1.16")
