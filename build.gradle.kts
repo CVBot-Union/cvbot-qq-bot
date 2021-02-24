@@ -15,18 +15,20 @@ repositories {
 dependencies {
     testImplementation(kotlin("test-junit"))
     implementation("org.json:json:20200518")
-    implementation("net.mamoe:mirai-core:2.4.0")
-    implementation("io.javalin:javalin:3.10.1")
-    implementation("net.mamoe","kotlin-jvm-blocking-bridge-jvm","1.10.0")
-    implementation("org.jetbrains.kotlinx", "kotlinx-serialization-protobuf", "1.0.1")
-    implementation("org.jetbrains.kotlinx", "kotlinx-serialization-json", "1.0.1")
+    implementation("net.mamoe:mirai-core-all:2.4.0")
+    implementation("net.mamoe:mirai-console-terminal:2.4.0")
+    implementation("net.mamoe:mirai-console:2.4.0")
+    implementation("io.javalin:javalin:3.13.3")
+    implementation("net.mamoe","kotlin-jvm-blocking-bridge","1.10.0")
+    implementation("org.jetbrains.kotlinx", "kotlinx-serialization-protobuf", "1.1.0")
+    implementation("org.jetbrains.kotlinx", "kotlinx-serialization-json", "1.1.0")
     implementation("org.jetbrains.kotlinx","kotlinx-coroutines-io","0.1.16")
     implementation("org.slf4j","slf4j-api", "1.7.30")
     implementation("org.slf4j","slf4j-simple", "1.7.30")
 
 }
 
-tasks.withType<KotlinCompile> {
+tasks.withType<KotlinCompile>() {
     kotlinOptions.jvmTarget = "1.8"
 }
 
