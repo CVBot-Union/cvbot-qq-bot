@@ -14,7 +14,6 @@ import java.util.*
 
 val NO_TRANSLATION = listOf("1076086233", "1095069733", "783768263", "932263215", "252047639", "783541028")
 
-@ExperimentalCoroutinesApi
 suspend fun launchBot(
     qqId: Long,
     password: String,
@@ -39,6 +38,10 @@ suspend fun launchBot(
             delay(200)
             launch { subject.sendImage(File("situation.jpg")) }
         }
+    }
+
+    httpServer.get("/114514") { ctx->
+        ctx.result("1919810")
     }
 
     httpServer.post("/") { ctx ->
@@ -142,24 +145,18 @@ suspend fun launchBot(
         } else if(dataJson != null) {
             bot.logger.info("ignored tweet "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
         }
+        System.gc()
     }
 }
 
-@ExperimentalCoroutinesApi
-fun main() = runBlocking {
+suspend fun main(){
     val qqId = 3174235713L
     print("输入QQ${qqId}的密码：")
     val password = Scanner(System.`in`).next()
-    while(true) {
-        val httpServer = Javalin.create().start(1919)
-        try {
-            launchBot(qqId, password, httpServer)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        httpServer.stop()
-        coroutineContext.cancelChildren()
-        MiraiLogger.create(qqId.toString()).info("bot已下线")
-        System.gc()
+    val httpServer = Javalin.create().start(1919)
+    try {
+        launchBot(qqId, password, httpServer)
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }
