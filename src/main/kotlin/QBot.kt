@@ -23,6 +23,7 @@ suspend fun launchBot(
     val bot = BotFactory.newBot(qqId,password) {
         fileBasedDeviceInfo("deviceInfo.json")
         protocol = BotConfiguration.MiraiProtocol.ANDROID_PAD  //可以和手机同时在线
+        parentCoroutineContext = coroutineContext
     }.alsoLogin()
     bot.logger.follower = SingleFileLogger(qqId.toString())
 //    if(bot.isOnline) {
@@ -145,18 +146,23 @@ suspend fun launchBot(
         } else if(dataJson != null) {
             bot.logger.info("ignored tweet "+dataJson.getJSONObject("data").getJSONObject("tweet").getString("id_str"))
         }
-        System.gc()
     }
 }
 
-suspend fun main(){
+fun main() = runBlocking {
     val qqId = 3174235713L
     print("输入QQ${qqId}的密码：")
     val password = Scanner(System.`in`).next()
-    val httpServer = Javalin.create().start(1919)
-    try {
-        launchBot(qqId, password, httpServer)
-    } catch (e: Exception) {
-        e.printStackTrace()
+    while(true) {
+        val httpServer = Javalin.create().start(1919)
+        try {
+            launchBot(qqId, password, httpServer)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        httpServer.stop()
+        coroutineContext.cancelChildren()
+        MiraiLogger.create(qqId.toString()).info("bot已下线")
+        System.gc()
     }
 }
